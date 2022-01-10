@@ -4,75 +4,71 @@ import seaborn as sns
 import pandas as pd
 from PIL import Image
 import matplotlib.pyplot as plt
+import os
+from sklearn.preprocessing import normalize
+
+
+working_directory = "C:/Users/gebruiker/OneDrive - KU Leuven/Desktop/" 
+SUBJECT = 1
 
 atlas_file = "C:/Users/gebruiker/OneDrive - KU Leuven/Desktop/atlas_2mm.nii.gz"
-file = "C:/Users/gebruiker/OneDrive - KU Leuven/Desktop/swausub-01_rfMRI_REST1_LR.nii" 
+file_rs = "C:/Users/gebruiker/OneDrive - KU Leuven/Desktop/swausub-01_rfMRI_REST1_LR.nii" 
+file_tb1 = "C:/Users/gebruiker/OneDrive - KU Leuven/Desktop/swausub-01_tfMRI_LANGUAGE_LR.nii"
+file_tb2 = "C:/Users/gebruiker/OneDrive - KU Leuven/Desktop/swausub-01_tfMRI_MOTOR_LR.nii"
 legend_file = "C:/Users/gebruiker/OneDrive - KU Leuven/Desktop/atlas.txt"
 
-img = nib.load(file)
-atlas = nib.load(atlas_file)
-legend = pd.read_csv(legend_file,sep='(',header=None)
-
-df_max = pd.DataFrame(index=legend[0],columns=range(img.shape[-1]),dtype="float") #make df size of areas x timepoints
-df_mean = pd.DataFrame(index=legend[0],columns=range(img.shape[-1]),dtype="float") #make df size of areas x timepoints
-df_min = pd.DataFrame(index=legend[0],columns=range(img.shape[-1]),dtype="float")
-df_std = pd.DataFrame(index=legend[0],columns=range(img.shape[-1]),dtype="float")
-atlas_data = atlas.get_fdata() #load atlas values
-
-img_shape = img.shape[-1]
-for ii in range(img_shape): #loop over timepoints
-# for ii in range(50):
-    print(f'running timepoint {ii:04d} of {img_shape:04d}')
-    sub_img = img.slicer[:,:,:,ii] 
+def dfs_from_nii(file,atlas=atlas_file,legend=legend_file, SUBJECT=SUBJECT):
+    ''' creates dfs for each brain area in a certain atlas / legend conformation
+        does this for a file: .nii
+    '''
+    file = file
+    atlas_file = atlas
+    legend_file = legend
     
-     
-    img_data = sub_img.get_fdata() #load vol values
+        
+    img = nib.load(file)
+    atlas = nib.load(atlas_file)
+    atlas_data = atlas.get_fdata() #load atlas values
+    legend = pd.read_csv(legend_file,sep='(',header=None)
     
-    for jj in range(legend.shape[0]): #loop over areas
-    # for jj in range(50):
-        area_number = jj 
-        area_index = np.where(atlas_data==area_number)
-        area_values = img_data[area_index]
+    df_max = pd.DataFrame(index=legend[0],columns=range(img.shape[-1]),dtype="float") #make df size of areas x timepoints
+    df_mean = pd.DataFrame(index=legend[0],columns=range(img.shape[-1]),dtype="float") #make df size of areas x timepoints
+    df_min = pd.DataFrame(index=legend[0],columns=range(img.shape[-1]),dtype="float")
+    df_std = pd.DataFrame(index=legend[0],columns=range(img.shape[-1]),dtype="float")
+    
+    
+    img_shape = img.shape[-1]
+    for ii in range(img_shape): #loop over timepoints
+    # for ii in range(50):
+        print(f'extracting from timepoint {ii:04d} of {img_shape:04d} from subject:{SUBJECT}')
+        sub_img = img.slicer[:,:,:,ii] 
         
-        max_value = np.max(area_values)
-        mean_value = np.mean(area_values)
-        min_value = np.min(area_values)
-        std_value = np.std(area_values)
+         
+        img_data = sub_img.get_fdata() #load vol values
         
-        df_max.iloc[jj,ii] = max_value
-        df_mean.iloc[jj,ii] = mean_value
-        df_min.iloc[jj,ii] = min_value
-        df_std.iloc[jj,ii] = std_value
+        for jj in range(legend.shape[0]): #loop over areas
+        # for jj in range(50):
+            area_number = jj 
+            area_index = np.where(atlas_data==area_number)
+            area_values = img_data[area_index]
+            
+            max_value = np.max(area_values)
+            mean_value = np.mean(area_values)
+            min_value = np.min(area_values)
+            std_value = np.std(area_values)
+            
+            df_max.iloc[jj,ii] = max_value
+            df_mean.iloc[jj,ii] = mean_value
+            df_min.iloc[jj,ii] = min_value
+            df_std.iloc[jj,ii] = std_value
+            
+    return df_max, df_mean, df_min, df_std
         
 
-
-# figsize_x = round(img.shape[-1]/10)
-# g = sns.clustermap(df_mean,
-#                 col_cluster=False,
-#                 cmap='rocket',
-#                 z_score=0,
-#                 figsize=(figsize_x,25),
-#                 metric='correlation',
-#                 yticklabels=1,
-#                 xticklabels=10)
-
-# ax = g.ax_heatmap
-# ax.set_xlabel('time (samples)')
-# ax.set_ylabel('brain areas')
-# ax.tick_params(left=True, top=True, labelleft=True, labeltop=True, right=False, labelright=False, bottom=False, labelbottom=False)
 
 def standard_scale_data(data):
     'scales data between 0 and 1'
     return (data - np.min(data)) / (np.max(data) - np.min(data))
-
-min_vals = df_min.to_numpy()
-max_vals = df_max.to_numpy()
-mean_vals = df_mean.to_numpy()
-std_vals = df_std.to_numpy()
-
-#normalize these values across axis=1 before passing to make_rgb_value
-from sklearn.preprocessing import normalize
-
 
 
 def make_rgb_image(rdata,gdata,bdata,kron_val=3):
@@ -95,29 +91,9 @@ def make_rgb_image(rdata,gdata,bdata,kron_val=3):
     img_rgb = Image.fromarray(rgb)
     return img_rgb
 
-# img_rgb.save('rgb_image_language.png')
-
-
-#%% image from correlations
-max_corr = df_max.T.corr()
-mean_corr = df_mean.T.corr()
-std_corr = df_std.T.corr()
-
-plt.figure(figsize=(29,25))
-ax = sns.heatmap(max_corr,yticklabels=1,xticklabels=1)
-sns.heatmap(mean_corr)
-sns.heatmap(std_corr)
-
-
-test_img = make_rgb_image(max_corr,mean_corr,std_corr)
-test_img.save('corr_test.png')
-
-#%% Create sliding window
-df = df_max
-window_size = 50
-ii=0
-iimax = df.shape[1] - window_size
 def combine_corr_ts(df,ii,window_size):
+    '''combines correlation images and time series into one big RGB composite
+    returns RGB image object'''
    
     data_norm = normalize(df,axis=1)
     data_standard = standard_scale_data(data_norm)
@@ -134,25 +110,71 @@ def combine_corr_ts(df,ii,window_size):
     
     return data_out
 
-for ii in range(0,iimax,5):
-    max_image_data = combine_corr_ts(df_max,ii,window_size)
-    mean_image_data = combine_corr_ts(df_mean,ii,window_size)
-    std_image_data = combine_corr_ts(df_std,ii,window_size)
+def output_images(img_path,file_specifier='',working_directory=working_directory,df_max=df_max,df_mean=df_mean,df_std=df_std,window_size=50,step_size=25):
+    ''' outputs image objects to png files in the defined file directory
+    add a custom file specifier if you want to add multiple images to the same folder'''
+    os.chdir(working_directory)
+    IMAGE_DIR_PATH = img_path
+    if not os.path.exists(IMAGE_DIR_PATH):
+        print('making images directory')
+        os.mkdir(IMAGE_DIR_PATH)
+    
+    os.chdir(IMAGE_DIR_PATH)
     
     
-    fig, axs = plt.subplots(2,3,figsize = (15,6))
+    window_size = window_size
+    ii=0
+    iimax = df_max.shape[1] - window_size
     
-    g1 = sns.heatmap(max_image_data,ax=axs[0,0],cmap = 'rocket')
-    g2 = sns.heatmap(mean_image_data,ax=axs[0,1],cmap='rocket')
-    g3 = sns.heatmap(std_image_data,ax=axs[0,2],cmap='rocket')
+    for ii in range(0,iimax,step_size):
+        max_image_data = combine_corr_ts(df_max,ii,window_size)
+        mean_image_data = combine_corr_ts(df_mean,ii,window_size)
+        std_image_data = combine_corr_ts(df_std,ii,window_size)
+        
+        image_rgb = make_rgb_image(max_image_data,mean_image_data,std_image_data)
+        
+        img_string = f'IMG_subject{SUBJECT:03d}_{file_specifier}{ii:04d}.png'
+        
+        print(f'saving {img_string}')
+        image_rgb.save(img_string)
+        
+        #UNCOMMENT IF YOU WNAT TO SEE PLOTS
+        # fig, axs = plt.subplots(2,3,figsize = (15,6))
+        
+        # g1 = sns.heatmap(max_image_data,ax=axs[0,0],cmap = 'rocket')
+        # g2 = sns.heatmap(mean_image_data,ax=axs[0,1],cmap='rocket')
+        # g3 = sns.heatmap(std_image_data,ax=axs[0,2],cmap='rocket')
+        
+        # axs[0,0].set_title('Max Intensity')
+        # axs[0,1].set_title('Mean Intensity')
+        # axs[0,2].set_title('Std of Intensity')
+        
+        
+        # axs[1,1].imshow(image_rgb)
+        # axs[1,0].axis('off')
+        # axs[1,2].axis('off')
+        # plt.show()
+    os.chdir(working_directory)
+        
+        
+def main():
+    # load tb1
+    df_max, df_mean, df_min, df_std = dfs_from_nii(file_tb1)
+    output_images('images_tb',file_specifier='lang')
     
-    axs[0,0].set_title('Max Intensity')
-    axs[0,1].set_title('Mean Intensity')
-    axs[0,2].set_title('Std of Intensity')
+    #load tb2
+    df_max, df_mean, df_min, df_std = dfs_from_nii(file_tb2)
+    output_images('images_tb',file_specifier='motor')
     
-    image_rgb = make_rgb_image(max_image_data,mean_image_data,std_image_data)
-    axs[1,1].imshow(image_rgb)
-    axs[1,0].axis('off')
-    axs[1,2].axis('off')
-    plt.show()
+    #load rs
+    df_max, df_mean, df_min, df_std = dfs_from_nii(file_rs)
+    output_images('images_rs')
     
+    
+if __name__=='__main__':
+    main()
+    
+    
+    
+    
+        
