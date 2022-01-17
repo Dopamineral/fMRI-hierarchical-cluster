@@ -4,6 +4,7 @@ import pandas as pd
 from PIL import Image
 import os
 from sklearn.preprocessing import normalize
+from tqdm import tqdm
 
 # working_directory = "C:/Users/gebruiker/OneDrive - KU Leuven/Desktop/" 
 # SUBJECT = 1
@@ -26,6 +27,9 @@ class ImagePrepper():
         self.file_tb2 = file_tb2
         self.legend_file = legend_file
     
+    def get_legend(self):
+        legend = pd.read_csv(self.legend_file,sep='(',header=None)
+        return legend
     
     def dfs_from_nii(self,file):
         ''' creates dfs for each brain area in a certain atlas / legend conformation
@@ -48,9 +52,10 @@ class ImagePrepper():
         
         
         img_shape = img.shape[-1]
-        for ii in range(img_shape): #loop over timepoints
+        print(f'extracting from timepoints of {img_shape:04d} from subject:{self.SUBJECT}')
+        for ii in tqdm(range(img_shape),position=0): #loop over timepoints
         # for ii in range(50):
-            print(f'extracting from timepoint {ii:04d} of {img_shape:04d} from subject:{self.SUBJECT}')
+            # print(f'extracting from timepoint {ii:04d} of {img_shape:04d} from subject:{self.SUBJECT}')
             sub_img = img.slicer[:,:,:,ii] 
             
              
@@ -120,6 +125,32 @@ class ImagePrepper():
         
         return data_out
     
+    def combine_ts(self,df,ii,window_size):
+        '''combines correlation images and time series into one big RGB composite
+        returns RGB image object'''
+       
+        data_norm = normalize(df,axis=1)
+        data_standard = self.standard_scale_data(data_norm)
+        
+        data_windowed = data_standard[:,ii:ii+window_size]
+        
+        return data_windowed
+    
+    def combine_corr(self,df,ii,window_size):
+        '''combines correlation images and time series into one big RGB composite
+        returns RGB image object'''
+       
+        data_norm = normalize(df,axis=1)
+        data_standard = self.standard_scale_data(data_norm)
+        
+        data_windowed = data_standard[:,ii:ii+window_size]
+      
+        df_windowed = df.iloc[:,ii:ii+window_size]
+        data_corr = df_windowed.T.corr()
+        data_corr = data_corr.to_numpy()
+        
+        return data_corr
+    
     def output_images(self,file,img_path,file_specifier='',window_size=50,step_size=25):
         ''' outputs image objects to png files in the defined file directory
         add a custom file specifier if you want to add multiple images to the same folder'''
@@ -145,7 +176,8 @@ class ImagePrepper():
        
         
         #Output the images
-        for ii in range(0,iimax,step_size):
+        print( f' saving IMG_subject{self.SUBJECT:03d}_{file_specifier} - INDEX.png')
+        for ii in tqdm(range(0,iimax,step_size)):
             max_image_data = self.combine_corr_ts(df_max,ii,window_size)
             mean_image_data = self.combine_corr_ts(df_mean,ii,window_size)
             std_image_data = self.combine_corr_ts(df_std,ii,window_size)
@@ -154,7 +186,7 @@ class ImagePrepper():
             
             img_string = f'IMG_subject{self.SUBJECT:03d}_{file_specifier}{ii:04d}.png'
             
-            print(f'saving {img_string}')
+            # print(f'saving {img_string}')
             image_rgb.save(img_string)
             
             #UNCOMMENT IF YOU WNAT TO SEE PLOTS
